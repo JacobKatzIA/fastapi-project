@@ -7,3 +7,5 @@ __pycache__/
 
 # macOS -Ignorerar en metadatafil som macOS gärna skapar i mappar-
 .DS_Store
+
+.env
