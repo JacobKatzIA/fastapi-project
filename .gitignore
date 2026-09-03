@@ -1,0 +1,11 @@
+# Virtual environment -Ignorerar hela vår virtuella miljö-
+venv/
+
+# Python Cache. -Ignorerar filer som Python genererar automatiskt-
+__pycache__/
+*.pyc
+
+# macOS -Ignorerar en metadatafil som macOS gärna skapar i mappar-
+.DS_Store
+
+.env
