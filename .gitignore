@@ -8,4 +8,5 @@ __pycache__/
 # macOS -Ignorerar en metadatafil som macOS gärna skapar i mappar-
 .DS_Store
 
+# API key is stored in the .env file (should not be published on Github)
 .env

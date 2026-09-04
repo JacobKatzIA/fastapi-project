@@ -7,10 +7,13 @@ from dotenv import load_dotenv
 # Reads the variables in .env file and make them accessible
 load_dotenv()
 
-# Get the value from the varibale TEST_API_KEY, which is: hello123
+# Get the value from the varibale TEST_API_KEY
+# (The real API key is stored in .env)
 # This hides the API key from the public
-test_api_key = os.getenv("TEST_API_KEY")
+weather_api_key = os.getenv("WEATHER_API_KEY")
 
+if not weather_api_key:
+    raise RuntimeError("WEATHER_API_KEY is missing")
 
 
 # FastAPI is a class
@@ -27,6 +30,13 @@ posts = [
 
 class Post(BaseModel):
     title: str
+
+class WeatherResponse(BaseModel):
+    city: str
+    temperature: float
+    description: str
+    feels_like: str
+    humidity: int
 
 
 # @app.get("/") is a decorator. It tells FastAPI that the function below
@@ -143,4 +153,94 @@ async def get_external_post(post_id: int):
         raise HTTPException(
             status_code=502,
             detail="External API returned an error"
+        )
+    
+
+
+
+@app.get("/weather/{city}", response_model=WeatherResponse)
+async def get_weather(city: str):
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+
+            # STEP 1:
+            # Send the city name to OpenWeather Geocoding API.
+            # This converts, for example, "Lund" into latitude and longitude.
+            geo_response = await client.get(
+                "https://api.openweathermap.org/geo/1.0/direct",
+                params={
+                    "q": city,
+                    "limit": 1,
+                    "appid": weather_api_key
+                }
+            )
+
+            # Check if the request to OpenWeather failed.
+            geo_response.raise_for_status()
+
+            # Convert the JSON response to Python data.
+            geo_data = geo_response.json()
+
+            # If the list is empty, OpenWeather could not find the city.
+            if not geo_data:
+                raise HTTPException(
+                    status_code=404,
+                    detail="City not found"
+                )
+
+            # Get latitude and longitude from the first result.
+            latitude = geo_data[0]["lat"]
+            longitude = geo_data[0]["lon"]
+
+
+            # STEP 2:
+            # Use latitude and longitude to request the actual weather data.
+            weather_response = await client.get(
+                "https://api.openweathermap.org/data/2.5/weather",
+                params={
+                    "lat": latitude,
+                    "lon": longitude,
+                    "appid": weather_api_key,
+                    "units": "metric"
+                }
+            )
+
+            # Handle invalid/inactive API key.
+            if weather_response.status_code == 401:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid or inactive weather API key"
+                )
+
+            # Check for other HTTP errors.
+            weather_response.raise_for_status()
+
+            # Convert the weather response from JSON to Python data.
+            data = weather_response.json()
+
+            # Return only the weather information that our API needs.
+            return {
+                "city": data["name"],
+                "temperature": data["main"]["temp"],
+                "description": data["weather"][0]["description"],
+                "feels_like": data["main"]["feels_like"],
+                "humidity": data["main"]["humidity"]
+            }
+
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=504,
+            detail="Weather API request timed out"
+        )
+
+    except httpx.RequestError:
+        raise HTTPException(
+            status_code=503,
+            detail="Weather API is unavailable"
+        )
+
+    except httpx.HTTPStatusError:
+        raise HTTPException(
+            status_code=502,
+            detail="Weather API returned an error"
         )
